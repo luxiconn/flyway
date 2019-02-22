@@ -15,10 +15,10 @@
  */
 package org.flywaydb.core.internal.database.postgresql;
 
-import org.flywaydb.core.internal.util.jdbc.JdbcTemplate;
 import org.flywaydb.core.internal.database.Schema;
 import org.flywaydb.core.internal.database.Table;
 import org.flywaydb.core.internal.database.Type;
+import org.flywaydb.core.internal.util.jdbc.JdbcTemplate;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -34,7 +34,7 @@ public class PostgreSQLSchema extends Schema<PostgreSQLDatabase> {
      * Creates a new PostgreSQL schema.
      *
      * @param jdbcTemplate The Jdbc Template for communicating with the DB.
-     * @param database    The database-specific support.
+     * @param database     The database-specific support.
      * @param name         The name of the schema.
      */
     PostgreSQLSchema(JdbcTemplate jdbcTemplate, PostgreSQLDatabase database, String name) {
@@ -48,11 +48,22 @@ public class PostgreSQLSchema extends Schema<PostgreSQLDatabase> {
 
     @Override
     protected boolean doEmpty() throws SQLException {
-        return !jdbcTemplate.queryForBoolean("SELECT EXISTS (" +
-                "   SELECT 1\n" +
-                "   FROM   pg_catalog.pg_class c\n" +
-                "   JOIN   pg_catalog.pg_namespace n ON n.oid = c.relnamespace\n" +
-                "   WHERE  n.nspname = ?)", name);
+        return !jdbcTemplate.queryForBoolean("SELECT EXISTS (\n" +
+                "    SELECT c.oid FROM pg_catalog.pg_class c\n" +
+                "    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace\n" +
+                "    LEFT JOIN pg_catalog.pg_depend d ON d.objid = c.oid AND d.deptype = 'e'\n" +
+                "    WHERE  n.nspname = ? AND d.objid IS NULL AND c.relkind IN ('r', 'v', 'S', 't')\n" +
+                "  UNION ALL\n" +
+                "    SELECT t.oid FROM pg_catalog.pg_type t\n" +
+                "    JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace\n" +
+                "    LEFT JOIN pg_catalog.pg_depend d ON d.objid = t.oid AND d.deptype = 'e'\n" +
+                "    WHERE n.nspname = ? AND d.objid IS NULL AND t.typcategory NOT IN ('A', 'C')\n" +
+                "  UNION ALL\n" +
+                "    SELECT p.oid FROM pg_catalog.pg_proc p\n" +
+                "    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace\n" +
+                "    LEFT JOIN pg_catalog.pg_depend d ON d.objid = p.oid AND d.deptype = 'e'\n" +
+                "    WHERE n.nspname = ? AND d.objid IS NULL\n" +
+                ")", name, name, name);
     }
 
     @Override
@@ -142,13 +153,15 @@ public class PostgreSQLSchema extends Schema<PostgreSQLDatabase> {
      * @throws SQLException when the clean statements could not be generated.
      */
     private List<String> generateDropStatementsForBaseTypes(boolean recreate) throws SQLException {
-
         List<Map<String, String>> rows =
                 jdbcTemplate.queryForList(
                         "select typname, typcategory from pg_catalog.pg_type t "
-                                + "where (t.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = t.typrelid)) and "
-                                + "NOT EXISTS(SELECT 1 FROM pg_catalog.pg_type el WHERE el.oid = t.typelem AND el.typarray = t.oid) and "
-                                + "t.typnamespace in (select oid from pg_catalog.pg_namespace where nspname = ?)",
+                                + "left join pg_depend dep on dep.objid = t.oid and dep.deptype = 'e' "
+                                + "where (t.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = t.typrelid)) "
+                                + "and NOT EXISTS(SELECT 1 FROM pg_catalog.pg_type el WHERE el.oid = t.typelem AND el.typarray = t.oid) "
+                                + "and t.typnamespace in (select oid from pg_catalog.pg_namespace where nspname = ?) "
+                                + "and dep.objid is null "
+                                + "and t.typtype != 'd'",
                         name);
 
         List<String> statements = new ArrayList<>();

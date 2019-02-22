@@ -15,34 +15,35 @@
  */
 package org.flywaydb.core.internal.database.postgresql;
 
-import org.flywaydb.core.api.configuration.FlywayConfiguration;
+import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.errorhandler.ErrorHandler;
 import org.flywaydb.core.internal.database.Database;
 import org.flywaydb.core.internal.database.SqlScript;
 import org.flywaydb.core.internal.exception.FlywayDbUpgradeRequiredException;
+import org.flywaydb.core.internal.util.placeholder.PlaceholderReplacer;
 import org.flywaydb.core.internal.util.StringUtils;
-import org.flywaydb.core.internal.util.scanner.Resource;
+import org.flywaydb.core.internal.util.scanner.LoadableResource;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Types;
+import java.util.List;
 
 /**
  * PostgreSQL database.
  */
-public class PostgreSQLDatabase extends Database {
+public class PostgreSQLDatabase extends Database<PostgreSQLConnection> {
     /**
      * Creates a new instance.
      *
      * @param configuration The Flyway configuration.
      * @param connection    The connection to use.
      */
-    public PostgreSQLDatabase(FlywayConfiguration configuration, Connection connection
+    public PostgreSQLDatabase(Configuration configuration, Connection connection, boolean originalAutoCommit
 
 
 
     ) {
-        super(configuration, connection, Types.NULL
+        super(configuration, connection, originalAutoCommit
 
 
 
@@ -50,12 +51,12 @@ public class PostgreSQLDatabase extends Database {
     }
 
     @Override
-    protected org.flywaydb.core.internal.database.Connection getConnection(Connection connection, int nullType
+    protected PostgreSQLConnection getConnection(Connection connection
 
 
 
     ) {
-        return new PostgreSQLConnection(configuration, this, connection, nullType
+        return new PostgreSQLConnection(configuration, this, connection, originalAutoCommit
 
 
 
@@ -80,16 +81,17 @@ public class PostgreSQLDatabase extends Database {
     }
 
     @Override
-    protected SqlScript doCreateSqlScript(Resource sqlScriptResource, String sqlScriptSource, boolean mixed
+    protected SqlScript doCreateSqlScript(LoadableResource sqlScriptResource,
+                                          PlaceholderReplacer placeholderReplacer, boolean mixed
 
 
 
     ) {
-        return new PostgreSQLSqlScript(sqlScriptResource, sqlScriptSource, mixed
+        return new PostgreSQLSqlScript(configuration, sqlScriptResource, mixed
 
 
 
-        );
+                , placeholderReplacer);
     }
 
     @Override
@@ -99,11 +101,16 @@ public class PostgreSQLDatabase extends Database {
 
     @Override
     protected String doGetCurrentUser() throws SQLException {
-        return mainConnection.getJdbcTemplate().queryForString("SELECT current_user");
+        return getMainConnection().getJdbcTemplate().queryForString("SELECT current_user");
     }
 
     @Override
     public boolean supportsDdlTransactions() {
+        return true;
+    }
+
+    @Override
+    protected boolean supportsChangingCurrentSchema() {
         return true;
     }
 

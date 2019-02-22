@@ -15,22 +15,25 @@
  */
 package org.flywaydb.core.internal.database.sybasease;
 
-import org.flywaydb.core.api.configuration.FlywayConfiguration;
+import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.errorhandler.ErrorHandler;
 import org.flywaydb.core.internal.database.Database;
 import org.flywaydb.core.internal.database.Delimiter;
 import org.flywaydb.core.internal.database.SqlScript;
 import org.flywaydb.core.internal.exception.FlywayDbUpgradeRequiredException;
-import org.flywaydb.core.internal.util.scanner.Resource;
+import org.flywaydb.core.internal.util.placeholder.PlaceholderReplacer;
+import org.flywaydb.core.internal.util.scanner.LoadableResource;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Types;
+import java.util.List;
 
 /**
  * Sybase ASE database.
  */
 public class SybaseASEDatabase extends Database<SybaseASEConnection> {
+    private final boolean jconnect;
+
     /**
      * Creates a new Sybase ASE database.
      *
@@ -38,25 +41,26 @@ public class SybaseASEDatabase extends Database<SybaseASEConnection> {
      * @param connection    The initial connection.
      * @param jconnect      Whether we are using the official jConnect driver or not (jTDS).
      */
-    public SybaseASEDatabase(FlywayConfiguration configuration, Connection connection, boolean jconnect
+    public SybaseASEDatabase(Configuration configuration, Connection connection, boolean originalAutoCommit, boolean jconnect
 
 
 
     ) {
-        super(configuration, connection, jconnect ? Types.VARCHAR : Types.NULL
+        super(configuration, connection, originalAutoCommit
 
 
 
         );
+        this.jconnect = jconnect;
     }
 
     @Override
-    protected SybaseASEConnection getConnection(Connection connection, int nullType
+    protected SybaseASEConnection getConnection(Connection connection
 
 
 
     ) {
-        return new SybaseASEConnection(configuration, this, connection, nullType
+        return new SybaseASEConnection(configuration, this, connection, originalAutoCommit, jconnect
 
 
 
@@ -76,16 +80,17 @@ public class SybaseASEDatabase extends Database<SybaseASEConnection> {
     }
 
     @Override
-    protected SqlScript doCreateSqlScript(Resource sqlScriptResource, String sqlScriptSource, boolean mixed
+    protected SqlScript doCreateSqlScript(LoadableResource sqlScriptResource,
+                                          PlaceholderReplacer placeholderReplacer, boolean mixed
 
 
 
     ) {
-        return new SybaseASESqlScript(sqlScriptResource, sqlScriptSource, mixed
+        return new SybaseASESqlScript(configuration, sqlScriptResource, mixed
 
 
 
-        );
+                , placeholderReplacer);
     }
 
     @Override
@@ -100,12 +105,17 @@ public class SybaseASEDatabase extends Database<SybaseASEConnection> {
 
     @Override
     protected String doGetCurrentUser() throws SQLException {
-        return mainConnection.getJdbcTemplate().queryForString("SELECT user_name()");
+        return getMainConnection().getJdbcTemplate().queryForString("SELECT user_name()");
     }
 
     @Override
     public boolean supportsDdlTransactions() {
         return false;
+    }
+
+    @Override
+    protected boolean supportsChangingCurrentSchema() {
+        return true;
     }
 
     @Override

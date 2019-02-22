@@ -15,33 +15,34 @@
  */
 package org.flywaydb.core.internal.database.derby;
 
-import org.flywaydb.core.api.configuration.FlywayConfiguration;
+import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.errorhandler.ErrorHandler;
 import org.flywaydb.core.internal.database.Database;
 import org.flywaydb.core.internal.database.SqlScript;
 import org.flywaydb.core.internal.exception.FlywayDbUpgradeRequiredException;
-import org.flywaydb.core.internal.util.scanner.Resource;
+import org.flywaydb.core.internal.util.placeholder.PlaceholderReplacer;
+import org.flywaydb.core.internal.util.scanner.LoadableResource;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Types;
+import java.util.List;
 
 /**
  * Derby database.
  */
-public class DerbyDatabase extends Database {
+public class DerbyDatabase extends Database<DerbyConnection> {
     /**
      * Creates a new instance.
      *
      * @param configuration The Flyway configuration.
      * @param connection    The connection to use.
      */
-    public DerbyDatabase(FlywayConfiguration configuration, Connection connection
+    public DerbyDatabase(Configuration configuration, Connection connection, boolean originalAutoCommit
 
 
 
     ) {
-        super(configuration, connection, Types.VARCHAR
+        super(configuration, connection, originalAutoCommit
 
 
 
@@ -49,12 +50,12 @@ public class DerbyDatabase extends Database {
     }
 
     @Override
-    protected org.flywaydb.core.internal.database.Connection getConnection(Connection connection, int nullType
+    protected DerbyConnection getConnection(Connection connection
 
 
 
     ) {
-        return new DerbyConnection(configuration, this, connection, nullType
+        return new DerbyConnection(configuration, this, connection, originalAutoCommit
 
 
 
@@ -65,22 +66,31 @@ public class DerbyDatabase extends Database {
     protected final void ensureSupported() {
         String version = majorVersion + "." + minorVersion;
 
-        if (majorVersion < 10 || (majorVersion == 10 && minorVersion < 8)) {
-            throw new FlywayDbUpgradeRequiredException("Derby", version, "10.8.1.2");
+        if (majorVersion < 10 || (majorVersion == 10 && minorVersion < 11)) {
+            throw new FlywayDbUpgradeRequiredException("Derby", version, "10.11.1.1");
+        }
+
+        if (majorVersion == 10 && minorVersion < 14) {
+        throw new org.flywaydb.core.internal.exception.FlywayEnterpriseUpgradeRequiredException("Apache", "Derby", version);
+        }
+
+        if ((majorVersion == 10 && minorVersion > 14) || majorVersion > 10) {
+            recommendFlywayUpgrade("Derby", version);
         }
     }
 
     @Override
-    protected SqlScript doCreateSqlScript(Resource sqlScriptResource, String sqlScriptSource, boolean mixed
+    protected SqlScript doCreateSqlScript(LoadableResource sqlScriptResource,
+                                          PlaceholderReplacer placeholderReplacer, boolean mixed
 
 
 
     ) {
-        return new DerbySqlScript(sqlScriptResource, sqlScriptSource, mixed
+        return new DerbySqlScript(configuration, sqlScriptResource, mixed
 
 
 
-        );
+                , placeholderReplacer);
     }
 
     @Override
@@ -90,11 +100,16 @@ public class DerbyDatabase extends Database {
 
     @Override
     protected String doGetCurrentUser() throws SQLException {
-        return mainConnection.getJdbcTemplate().queryForString("SELECT CURRENT_USER FROM SYSIBM.SYSDUMMY1");
+        return getMainConnection().getJdbcTemplate().queryForString("SELECT CURRENT_USER FROM SYSIBM.SYSDUMMY1");
     }
 
     @Override
     public boolean supportsDdlTransactions() {
+        return true;
+    }
+
+    @Override
+    protected boolean supportsChangingCurrentSchema() {
         return true;
     }
 

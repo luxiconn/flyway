@@ -15,24 +15,25 @@
  */
 package org.flywaydb.core.internal.database.sqlserver;
 
-import org.flywaydb.core.api.configuration.FlywayConfiguration;
+import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.errorhandler.ErrorHandler;
 import org.flywaydb.core.internal.database.Database;
 import org.flywaydb.core.internal.database.Delimiter;
 import org.flywaydb.core.internal.database.SqlScript;
 import org.flywaydb.core.internal.exception.FlywayDbUpgradeRequiredException;
 import org.flywaydb.core.internal.exception.FlywaySqlException;
+import org.flywaydb.core.internal.util.placeholder.PlaceholderReplacer;
 import org.flywaydb.core.internal.util.StringUtils;
-import org.flywaydb.core.internal.util.scanner.Resource;
+import org.flywaydb.core.internal.util.scanner.LoadableResource;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Types;
+import java.util.List;
 
 /**
  * SQL Server database.
  */
-public class SQLServerDatabase extends Database {
+public class SQLServerDatabase extends Database<SQLServerConnection> {
     private final boolean azure;
 
     /**
@@ -41,18 +42,18 @@ public class SQLServerDatabase extends Database {
      * @param configuration The Flyway configuration.
      * @param connection    The connection to use.
      */
-    public SQLServerDatabase(FlywayConfiguration configuration, Connection connection
+    public SQLServerDatabase(Configuration configuration, Connection connection, boolean originalAutoCommit
 
 
 
     ) {
-        super(configuration, connection, Types.VARCHAR
+        super(configuration, connection, originalAutoCommit
 
 
 
         );
         try {
-            azure = "SQL Azure".equals(mainConnection.getJdbcTemplate().queryForString(
+            azure = "SQL Azure".equals(getMainConnection().getJdbcTemplate().queryForString(
                     "SELECT CAST(SERVERPROPERTY('edition') AS VARCHAR)"));
         } catch (SQLException e) {
             throw new FlywaySqlException("Unable to determine database edition", e);
@@ -60,12 +61,12 @@ public class SQLServerDatabase extends Database {
     }
 
     @Override
-    protected org.flywaydb.core.internal.database.Connection getConnection(Connection connection, int nullType
+    protected SQLServerConnection getConnection(Connection connection
 
 
 
     ) {
-        return new SQLServerConnection(configuration, this, connection, nullType
+        return new SQLServerConnection(configuration, this, connection, originalAutoCommit
 
 
 
@@ -121,16 +122,17 @@ public class SQLServerDatabase extends Database {
     }
 
     @Override
-    protected SqlScript doCreateSqlScript(Resource sqlScriptResource, String sqlScriptSource, boolean mixed
+    protected SqlScript doCreateSqlScript(LoadableResource sqlScriptResource,
+                                          PlaceholderReplacer placeholderReplacer, boolean mixed
 
 
 
     ) {
-        return new SQLServerSqlScript(sqlScriptResource, sqlScriptSource, mixed
+        return new SQLServerSqlScript(configuration, sqlScriptResource, mixed
 
 
 
-        );
+                , placeholderReplacer);
     }
 
     @Override
@@ -145,12 +147,17 @@ public class SQLServerDatabase extends Database {
 
     @Override
     protected String doGetCurrentUser() throws SQLException {
-        return mainConnection.getJdbcTemplate().queryForString("SELECT SUSER_SNAME()");
+        return getMainConnection().getJdbcTemplate().queryForString("SELECT SUSER_SNAME()");
     }
 
     @Override
     public boolean supportsDdlTransactions() {
         return true;
+    }
+
+    @Override
+    protected boolean supportsChangingCurrentSchema() {
+        return false;
     }
 
     @Override

@@ -15,32 +15,33 @@
  */
 package org.flywaydb.core.internal.database.hsqldb;
 
-import org.flywaydb.core.api.configuration.FlywayConfiguration;
+import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.errorhandler.ErrorHandler;
 import org.flywaydb.core.internal.database.Database;
 import org.flywaydb.core.internal.database.SqlScript;
 import org.flywaydb.core.internal.exception.FlywayDbUpgradeRequiredException;
-import org.flywaydb.core.internal.util.scanner.Resource;
+import org.flywaydb.core.internal.util.placeholder.PlaceholderReplacer;
+import org.flywaydb.core.internal.util.scanner.LoadableResource;
 
 import java.sql.Connection;
-import java.sql.Types;
+import java.util.List;
 
 /**
  * HSQLDB database.
  */
-public class HSQLDBDatabase extends Database {
+public class HSQLDBDatabase extends Database<HSQLDBConnection> {
     /**
      * Creates a new instance.
      *
      * @param configuration The Flyway configuration.
      * @param connection    The connection to use.
      */
-    public HSQLDBDatabase(FlywayConfiguration configuration, Connection connection
+    public HSQLDBDatabase(Configuration configuration, Connection connection, boolean originalAutoCommit
 
 
 
     ) {
-        super(configuration, connection, Types.VARCHAR
+        super(configuration, connection, originalAutoCommit
 
 
 
@@ -48,12 +49,12 @@ public class HSQLDBDatabase extends Database {
     }
 
     @Override
-    protected org.flywaydb.core.internal.database.Connection getConnection(Connection connection, int nullType
+    protected HSQLDBConnection getConnection(Connection connection
 
 
 
     ) {
-        return new HSQLDBConnection(configuration, this, connection, nullType
+        return new HSQLDBConnection(configuration, this, connection, originalAutoCommit
 
 
 
@@ -64,22 +65,31 @@ public class HSQLDBDatabase extends Database {
     protected final void ensureSupported() {
         String version = majorVersion + "." + minorVersion;
 
-        if (majorVersion < 1 || (majorVersion == 18 && minorVersion < 8)) {
+        if (majorVersion < 1 || (majorVersion == 1 && minorVersion < 8)) {
             throw new FlywayDbUpgradeRequiredException("HSQLDB", version, "1.8");
+        }
+
+        if (majorVersion == 1 || (majorVersion == 2 && minorVersion < 3)) {
+        throw new org.flywaydb.core.internal.exception.FlywayEnterpriseUpgradeRequiredException("HSQL Development Group", "HSQLDB", version);
+        }
+
+        if (majorVersion > 2 || (majorVersion == 2 && minorVersion > 4)) {
+            recommendFlywayUpgrade("HSQLDB", version);
         }
     }
 
     @Override
-    protected SqlScript doCreateSqlScript(Resource sqlScriptResource, String sqlScriptSource, boolean mixed
+    protected SqlScript doCreateSqlScript(LoadableResource sqlScriptResource,
+                                          PlaceholderReplacer placeholderReplacer, boolean mixed
 
 
 
     ) {
-        return new HSQLDBSqlScript(sqlScriptResource, sqlScriptSource, mixed
+        return new HSQLDBSqlScript(configuration, sqlScriptResource, mixed
 
 
 
-        );
+                , placeholderReplacer);
     }
 
     @Override
@@ -90,6 +100,11 @@ public class HSQLDBDatabase extends Database {
     @Override
     public boolean supportsDdlTransactions() {
         return false;
+    }
+
+    @Override
+    protected boolean supportsChangingCurrentSchema() {
+        return true;
     }
 
     @Override

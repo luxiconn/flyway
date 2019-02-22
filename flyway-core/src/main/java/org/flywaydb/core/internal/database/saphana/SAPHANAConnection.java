@@ -15,20 +15,21 @@
  */
 package org.flywaydb.core.internal.database.saphana;
 
-import org.flywaydb.core.api.configuration.FlywayConfiguration;
+import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.internal.database.Connection;
 import org.flywaydb.core.internal.database.Schema;
 
 import java.sql.SQLException;
+import java.sql.Types;
 
 public class SAPHANAConnection extends Connection<SAPHANADatabase> {
-    SAPHANAConnection(FlywayConfiguration configuration, SAPHANADatabase database, java.sql.Connection connection,
-                      int nullType
+    SAPHANAConnection(Configuration configuration, SAPHANADatabase database, java.sql.Connection connection
+            , boolean originalAutoCommit
 
 
 
     ) {
-        super(configuration, database, connection, nullType
+        super(configuration, database, connection, originalAutoCommit, Types.VARCHAR
 
 
 
@@ -36,12 +37,12 @@ public class SAPHANAConnection extends Connection<SAPHANADatabase> {
     }
 
     @Override
-    protected String doGetCurrentSchemaName() throws SQLException {
+    protected String getCurrentSchemaNameOrSearchPath() throws SQLException {
         return jdbcTemplate.queryForString("SELECT CURRENT_SCHEMA FROM DUMMY");
     }
 
     @Override
-    public void doChangeCurrentSchemaTo(String schema) throws SQLException {
+    public void doChangeCurrentSchemaOrSearchPathTo(String schema) throws SQLException {
         jdbcTemplate.execute("SET SCHEMA " + database.doQuote(schema));
     }
 

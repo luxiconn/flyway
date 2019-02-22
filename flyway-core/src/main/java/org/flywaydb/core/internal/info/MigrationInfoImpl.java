@@ -154,13 +154,13 @@ public class MigrationInfoImpl implements MigrationInfo {
             return MigrationState.PENDING;
         }
 
+        if (MigrationType.BASELINE == appliedMigration.getType()) {
+            return MigrationState.BASELINE;
+        }
+
         if (resolvedMigration == null) {
             if (MigrationType.SCHEMA == appliedMigration.getType()) {
                 return MigrationState.SUCCESS;
-            }
-
-            if (MigrationType.BASELINE == appliedMigration.getType()) {
-                return MigrationState.BASELINE;
             }
 
             if ((appliedMigration.getVersion() == null) || getVersion().compareTo(context.lastResolved) < 0) {
@@ -259,7 +259,7 @@ public class MigrationInfoImpl implements MigrationInfo {
             return "Detected applied migration not resolved locally: " + getVersion();
         }
 
-        if (!context.pending && MigrationState.PENDING == getState() || MigrationState.IGNORED == getState()) {
+        if (!context.pending && MigrationState.PENDING == getState() || (!context.ignored && MigrationState.IGNORED == getState())) {
             if (getVersion() != null) {
                 return "Detected resolved migration not applied to database: " + getVersion();
             }
